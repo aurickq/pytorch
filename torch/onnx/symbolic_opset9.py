@@ -104,11 +104,26 @@ def mul(g, self, other):
     return g.op("Mul", self, other)
 
 
-def div(g, self, other):
-    return true_divide(g, self, other)
+def div(g, self, other, *args):
+    if len(args) == 0:
+        return true_divide(g, self, other)
+    else:
+        return _div_rounding_mode(g, self, other, *args)
 
 
-def floor_divide(g, self, other):
+@parse_args('v', 'v', 's')
+def _div_rounding_mode(g, self, other, rounding_mode):
+    if rounding_mode == 'true':
+        return true_divide(g, self, other)
+    elif rounding_mode == 'floor':
+        return _floor_divide(g, self, other)
+    elif rounding_mode == 'trunc':
+        return _trunc_divide(g, self, other)
+    else:
+        raise RuntimeError('Unsupported rounding mode: "{rounding_mode}". Expected "true", "floor" or "trunc"')
+
+
+def _trunc_divide(g, self, other):
     out = g.op('Div', self, other)
     # the correct operation is truncate, which is not supported in ONNX,
     # we cannot call floor since it will behave differently for negative numbers
@@ -134,6 +149,16 @@ def floor_divide(g, self, other):
     else:
         out = g.op("Cast", out, to_i=sym_help.cast_pytorch_to_onnx['Float'])
     return out
+
+
+def _floor_divide(g, self, other):
+    out = g.op('Div', self, other)
+    return g.op('Floor', out)
+
+
+def floor_divide(g, self, other):
+    # Deprecated behavior, floor_divide actually truncates
+    return _trunc_divide(g, self, other)
 
 
 def floordiv(g, self, other):
